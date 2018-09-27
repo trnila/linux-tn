@@ -7,6 +7,7 @@
 
 #include <linux/err.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/mx8_mu.h>
 
 static int version;
@@ -128,7 +129,7 @@ void MU_ReceiveMsg(void __iomem *base, uint32_t regIndex, uint32_t *msg)
 
 void MU_Init(void __iomem *base)
 {
-	uint32_t reg, offset;
+	uint32_t reg, offset, err;
 
 	version = readl_relaxed(base) >> 16;
 
@@ -139,8 +140,25 @@ void MU_Init(void __iomem *base)
 	/* Clear GIEn, RIEn, TIEn, GIRn and ABFn. */
 	reg &= ~(MU_CR_GIEn_MASK1 | MU_CR_RIEn_MASK1 | MU_CR_TIEn_MASK1
 		 | MU_CR_GIRn_MASK1 | MU_CR_NMI_MASK1 | MU_CR_Fn_MASK1);
+	/* clear MUR to reset MU on both sides */
+	reg |= MU_CR_MUR_MASK1;
 	writel_relaxed(reg, base + offset);
+
+	/* wait for reset */
+	offset = unlikely(version == MU_VER_ID_V10)
+			  ? MU_V10_ASR_OFFSET1 : MU_ASR_OFFSET1;
+	err = readl_poll_timeout(base + offset, reg, !(reg & MU_SR_BRS_MASK1), 0, 1000);
+	if(err) {
+		printk("Failed to reset MU!\n");
+	}
 }
+
+EXPORT_SYMBOL(MU_ReceiveMsg);
+EXPORT_SYMBOL(MU_ReadStatus);
+EXPORT_SYMBOL(MU_SetFn);
+EXPORT_SYMBOL(MU_EnableRxFullInt);
+EXPORT_SYMBOL(MU_Init);
+EXPORT_SYMBOL(MU_SendMessage);
 
 /**@}*/
 

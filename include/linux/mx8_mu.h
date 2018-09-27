@@ -27,9 +27,11 @@
 #define MU_CR_GIRn_MASK1	(0xF << 16)
 #define MU_CR_NMI_MASK1		(1 << 3)
 #define MU_CR_Fn_MASK1		0x7
+#define MU_CR_MUR_MASK1         (1 << 5)
 
 #define MU_SR_TE0_MASK1		(1 << 23)
 #define MU_SR_RF0_MASK1		(1 << 27)
+#define MU_SR_BRS_MASK1         (1 << 7)
 #define MU_CR_RIE0_MASK1	(1 << 27)
 #define MU_CR_GIE0_MASK1	(1 << 31)
 
