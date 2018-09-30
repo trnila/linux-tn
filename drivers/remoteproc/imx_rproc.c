@@ -5,7 +5,7 @@
  * it under the terms of the GNU General Public License version 2
  * as published by the Free Software Foundation.
  */
-
+#define DEBUG 1
 #include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/interrupt.h>
@@ -17,6 +17,8 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
+#include "remoteproc_internal.h"
+#include "qcom_mdt_loader.h"
 
 #define IMX7D_SRC_SCR			0x0C
 #define IMX7D_ENABLE_M4			BIT(3)
@@ -92,6 +94,12 @@ struct imx_rproc {
 
 static const struct imx_rproc_att imx_rproc_att_imx7d[] = {
 	/* dev addr , sys addr  , size	    , flags */
+	/* TCML (Code) */
+	{ 0x1FFE0000, 0x007e0000, 0x3FFFF, ATT_OWN},
+	/* TCMU (Data) */	
+//	{ 0x20000000, 0x00800000, 0x1FFFF, ATT_OWN},
+
+
 	/* OCRAM_S (M4 Boot code) - alias */
 	{ 0x00000000, 0x00180000, 0x00008000, 0 },
 	/* OCRAM_S (Code) */
@@ -157,6 +165,16 @@ static const struct imx_rproc_dcfg imx_rproc_cfg_imx6sx = {
 	.att		= imx_rproc_att_imx6sx,
 	.att_size	= ARRAY_SIZE(imx_rproc_att_imx6sx),
 };
+
+struct resource_table *imx_rproc_dummy_resources(struct rproc *rproc,
+					       const struct firmware *fw,
+					       int *tablesz)
+{
+	static struct resource_table table = { .ver = 1, };
+
+	*tablesz = sizeof(table);
+	return &table;
+}
 
 static int imx_rproc_start(struct rproc *rproc)
 {
@@ -269,6 +287,7 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
 
 		priv->mem[b].cpu_addr = devm_ioremap(&pdev->dev,
 						     att->sa, att->size);
+		printk("remaped %p -> %p %d\n", priv->mem[b].cpu_addr, att->sa, att->size);
 		if (!priv->mem[b].cpu_addr) {
 			dev_err(dev, "devm_ioremap_resource failed\n");
 			return -ENOMEM;
@@ -312,6 +331,23 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
 	return 0;
 }
 
+
+static int imx_rproc_load(struct rproc *rproc, const struct firmware *fw)
+{
+//	struct q6v5 *qproc = rproc->priv;
+	printk("loading: %p %d\n", fw->data, fw->size);
+	void* virt = ioremap_wc(0x7e0000, 0x3ffff);
+	printk("virt %p\n", virt);
+	memcpy(virt, fw->data, fw->size);
+
+	return 0;
+}
+
+static const struct rproc_fw_ops fw_ops = {
+	.find_rsc_table = imx_rproc_dummy_resources,
+	.load = imx_rproc_load,
+};
+
 static int imx_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -335,6 +371,8 @@ static int imx_rproc_probe(struct platform_device *pdev)
 			    NULL, sizeof(*priv));
 	if (!rproc)
 		return -ENOMEM;
+//	rproc->fw_ops = &fw_ops;
+	rproc->fw_ops = &rproc_elf_fw_ops;
 
 	dcfg = of_device_get_match_data(dev);
 	if (!dcfg) {
@@ -355,7 +393,7 @@ static int imx_rproc_probe(struct platform_device *pdev)
 		dev_err(dev, "filed on imx_rproc_addr_init\n");
 		goto err_put_rproc;
 	}
-
+/*
 	priv->clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(priv->clk)) {
 		dev_err(dev, "Failed to get clock\n");
@@ -367,11 +405,11 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	 * clk for M4 block including memory. Should be
 	 * enabled before .start for FW transfer.
 	 */
-	ret = clk_prepare_enable(priv->clk);
+/*	ret = clk_prepare_enable(priv->clk);
 	if (ret) {
 		dev_err(&rproc->dev, "Failed to enable clock\n");
 		goto err_put_rproc;
-	}
+	}*/
 
 	ret = rproc_add(rproc);
 	if (ret) {

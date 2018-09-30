@@ -20,6 +20,21 @@
 	model = "Freescale i.MX8MQ EVK";
 	compatible = "fsl,imx8mq-evk", "fsl,imx8mq";
 
+/*	m4_reserved_sysmem1: cm4@80000000 {
+		reg = <0x80000000 0x80000>;
+	};
+
+	m4_reserved_sysmem2: cm4@81000000 {
+		reg = <0x81000000 0x80000>;
+	};*/
+
+	imx7d-cm4 {
+		compatible	= "fsl,imx7d-cm4";
+/*		memory-region	= <&m4_reserved_sysmem1>, <&m4_reserved_sysmem2>;*/
+		syscon		= <&src>;
+/*		clocks		= <&clks IMX7D_ARM_M4_ROOT_CLK>;*/
+	};
+
 	bcmdhd_wlan_0: bcmdhd_wlan@0 {
 		compatible = "android,bcmdhd_wlan";
 		bcmdhd_fw = "/lib/firmware/bcm/1CX_BCM4356/fw_bcmdhd.bin";

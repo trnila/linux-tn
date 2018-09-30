@@ -17,6 +17,7 @@
  * GNU General Public License for more details.
  */
 
+#define DEBUG 1
 #include <linux/export.h>
 #include <linux/remoteproc.h>
 #include <linux/virtio.h>

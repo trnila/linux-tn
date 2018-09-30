@@ -6,7 +6,7 @@
  * Please see Documentation/firmware_class/ for more information.
  *
  */
-
+#define DEBUG 1
 #include <linux/capability.h>
 #include <linux/device.h>
 #include <linux/module.h>

@@ -23,6 +23,7 @@
  * GNU General Public License for more details.
  */
 
+#define DEBUG 1
 #define pr_fmt(fmt)    "%s: " fmt, __func__
 
 #include <linux/module.h>
@@ -189,10 +190,12 @@ rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
 			ret = -EINVAL;
 			break;
 		}
+		printk("before memcpy\n");
 
 		/* put the segment where the remote processor expects it */
 		if (phdr->p_filesz)
 			memcpy(ptr, elf_data + phdr->p_offset, filesz);
+		printk("after memcpy\n");
 
 		/*
 		 * Zero out remaining memory for this segment.
@@ -201,8 +204,9 @@ rproc_elf_load_segments(struct rproc *rproc, const struct firmware *fw)
 		 * did this for us. albeit harmless, we may consider removing
 		 * this.
 		 */
-		if (memsz > filesz)
-			memset(ptr + filesz, 0, memsz - filesz);
+//		if (memsz > filesz)
+//			memset(ptr + filesz, 0, memsz - filesz);
+		printk("after memset\n");
 	}
 
 	return ret;
