@@ -10,6 +10,8 @@
 #include <linux/iopoll.h>
 #include <linux/mx8_mu.h>
 
+#define TIMEOUT_US 1000000
+
 static int version;
 
 /*!
@@ -87,20 +89,26 @@ void MU_EnableGeneralInt(void __iomem *base, uint32_t index)
  */
 void MU_SendMessage(void __iomem *base, uint32_t regIndex, uint32_t msg)
 {
+	void __iomem *ASR, *ATR0;
 	uint32_t mask = MU_SR_TE0_MASK1 >> regIndex;
+	int err;
+	uint32_t reg;
+
+	ASR = base + MU_ASR_OFFSET1;
+	ATR0 = base + MU_ATR0_OFFSET1;
 
 	if (unlikely(version == MU_VER_ID_V10)) {
-		/* Wait TX register to be empty. */
-		while (!(readl_relaxed(base + MU_V10_ASR_OFFSET1) & mask))
-			;
-		writel_relaxed(msg, base + MU_V10_ATR0_OFFSET1
-			       + (regIndex * 4));
-	} else {
-		/* Wait TX register to be empty. */
-		while (!(readl_relaxed(base + MU_ASR_OFFSET1) & mask))
-			;
-		writel_relaxed(msg, base + MU_ATR0_OFFSET1  + (regIndex * 4));
+		ASR = base + MU_V10_ASR_OFFSET1;
+		ATR0 = base + MU_V10_ATR0_OFFSET1;
 	}
+
+	/* Wait TX register to be empty. */
+	err = readl_poll_timeout(ASR, reg, reg & mask, 0, TIMEOUT_US);
+	if(err) {
+		pr_err("MU_SendMessage timed out\n");
+	}
+
+	writel_relaxed(msg, ATR0 + regIndex * 4);
 }
 
 
@@ -109,20 +117,25 @@ void MU_SendMessage(void __iomem *base, uint32_t regIndex, uint32_t msg)
  */
 void MU_ReceiveMsg(void __iomem *base, uint32_t regIndex, uint32_t *msg)
 {
+	void __iomem *ASR, *ARR0;
 	uint32_t mask = MU_SR_RF0_MASK1 >> regIndex;
+	int err;
+	uint32_t reg;
+
+	ASR = base + MU_ASR_OFFSET1;
+	ARR0 = base + MU_ARR0_OFFSET1;
 
 	if (unlikely(version == MU_VER_ID_V10)) {
-		/* Wait RX register to be full. */
-		while (!(readl_relaxed(base + MU_V10_ASR_OFFSET1) & mask))
-			;
-		*msg = readl_relaxed(base + MU_V10_ARR0_OFFSET1
-				     + (regIndex * 4));
-	} else {
-		/* Wait RX register to be full. */
-		while (!(readl_relaxed(base + MU_ASR_OFFSET1) & mask))
-			;
-		*msg = readl_relaxed(base + MU_ARR0_OFFSET1 + (regIndex * 4));
+		ASR = base + MU_V10_ASR_OFFSET1;
+		ARR0 = base + MU_V10_ARR0_OFFSET1;
 	}
+
+	/* Wait RX register to be full. */
+	err = readl_poll_timeout(ASR, reg, reg & mask, 0, TIMEOUT_US);
+	if(err) {
+		pr_err("MU_ReceiveMsg timed out\n");
+	}
+	*msg = readl_relaxed(ARR0 + (regIndex * 4));
 }
 
 
@@ -147,7 +160,7 @@ void MU_Init(void __iomem *base)
 	/* wait for reset */
 	offset = unlikely(version == MU_VER_ID_V10)
 			  ? MU_V10_ASR_OFFSET1 : MU_ASR_OFFSET1;
-	err = readl_poll_timeout(base + offset, reg, !(reg & MU_SR_BRS_MASK1), 0, 1000);
+	err = readl_poll_timeout(base + offset, reg, !(reg & MU_SR_BRS_MASK1), 0, TIMEOUT_US);
 	if(err) {
 		printk("Failed to reset MU!\n");
 	}
