@@ -315,6 +315,10 @@ static int rpmsg_dev_match(struct device *dev, struct device_driver *drv)
 	const struct rpmsg_device_id *ids = rpdrv->id_table;
 	unsigned int i;
 
+	if(strcmp(drv->name, "rpmsg_chrdev") == 0) {
+		return 1;
+	}
+
 	if (rpdev->driver_override)
 		return !strcmp(rpdev->driver_override, drv->name);
 

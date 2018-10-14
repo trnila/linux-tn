@@ -256,6 +256,7 @@ free_kbuf:
 	return ret < 0 ? ret : len;
 }
 
+/*
 static unsigned int rpmsg_eptdev_poll(struct file *filp, poll_table *wait)
 {
 	struct rpmsg_eptdev *eptdev = filp->private_data;
@@ -273,6 +274,7 @@ static unsigned int rpmsg_eptdev_poll(struct file *filp, poll_table *wait)
 
 	return mask;
 }
+*/
 
 static long rpmsg_eptdev_ioctl(struct file *fp, unsigned int cmd,
 			       unsigned long arg)
@@ -291,7 +293,7 @@ static const struct file_operations rpmsg_eptdev_fops = {
 	.release = rpmsg_eptdev_release,
 	.read = rpmsg_eptdev_read,
 	.write = rpmsg_eptdev_write,
-	.poll = rpmsg_eptdev_poll,
+//	.poll = rpmsg_eptdev_poll,
 	.unlocked_ioctl = rpmsg_eptdev_ioctl,
 };
 
