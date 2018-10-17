@@ -12,7 +12,6 @@
  * http://www.opensource.org/licenses/gpl-license.html
  * http://www.gnu.org/copyleft/gpl.html
  */
-
 #include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -164,6 +163,7 @@ static int rpmsg_tty_probe(struct rpmsg_device *rpdev)
 	rpmsgtty_driver->minor_start = 0;
 	rpmsgtty_driver->type = TTY_DRIVER_TYPE_CONSOLE;
 	rpmsgtty_driver->init_termios = tty_std_termios;
+	rpmsgtty_driver->flags |= TTY_DRIVER_DYNAMIC_DEV;
 
 	tty_set_operations(rpmsgtty_driver, &imxrpmsgtty_ops);
 
@@ -176,6 +176,8 @@ static int rpmsg_tty_probe(struct rpmsg_device *rpdev)
 	rpmsgtty_driver->driver_state = cport;
 	cport->rpmsgtty_driver = rpmsgtty_driver;
 
+	tty_port_link_device(&cport->port, rpmsgtty_driver, 0);
+
 	ret = tty_register_driver(cport->rpmsgtty_driver);
 	if (ret < 0) {
 		pr_err("Couldn't install rpmsg tty driver: ret %d\n", ret);
@@ -183,6 +185,8 @@ static int rpmsg_tty_probe(struct rpmsg_device *rpdev)
 	} else {
 		pr_info("Install rpmsg tty driver!\n");
 	}
+
+	tty_register_device(rpmsgtty_driver, 0, NULL);
 
 	/*
 	 * send a message to our remote processor, and tell remote
@@ -212,6 +216,9 @@ static void rpmsg_tty_remove(struct rpmsg_device *rpdev)
 	struct rpmsgtty_port *cport = dev_get_drvdata(&rpdev->dev);
 
 	dev_info(&rpdev->dev, "rpmsg tty driver is removed\n");
+
+	tty_vhangup(cport->port.tty);
+	tty_unregister_device(cport->rpmsgtty_driver, 0);
 
 	tty_unregister_driver(cport->rpmsgtty_driver);
 	put_tty_driver(cport->rpmsgtty_driver);
