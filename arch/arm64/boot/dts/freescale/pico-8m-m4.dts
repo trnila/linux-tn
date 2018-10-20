@@ -28,13 +28,19 @@
 	};
 };
 
+&i2c1 {
+	status = "disabled";
+};
+
 &i2c2 {
+	status = "disabled";
 	ov5645_mipi: ov5645_mipi@3c {
 		status = "disabled";
 	};
 };
 
 &i2c3 {
+	status = "disabled";
 	ov5645_mipi2: ov5645_mipi2@3c {
 		status = "disabled";
 	};
