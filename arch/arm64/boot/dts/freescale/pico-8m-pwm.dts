@@ -1,0 +1,51 @@
+#include "pico-8m.dts"
+
+&iomuxc {
+	pinctrl-names = "default";
+
+	pico-8m {
+		pinctrl_pwm2: pwm2 {
+			fsl,pins = <
+				MX8MQ_IOMUXC_SPDIF_RX_PWM2_OUT      0x16
+			>;
+		};
+
+		pinctrl_pwm3: pwm3 {
+			// for demonstration, booth pins are set for pwm output
+			fsl,pins = <
+				MX8MQ_IOMUXC_I2C3_SDA_PWM3_OUT      0x16
+				MX8MQ_IOMUXC_SPDIF_TX_PWM3_OUT      0x16
+			>;
+		};
+
+		pinctrl_pwm4: pwm4 {
+			fsl,pins = <
+				MX8MQ_IOMUXC_I2C3_SCL_PWM4_OUT      0x16
+				MX8MQ_IOMUXC_SAI3_MCLK_PWM4_OUT     0x16
+			>;
+		};
+	};
+};
+
+// i2c3 overlaps with both PWM3 and PWM4
+&i2c3 {
+	status = "disabled";
+};
+
+&pwm2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm2>;
+	status = "okay";
+};
+
+&pwm3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm3>;
+	status = "okay";
+};
+
+&pwm4 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm4>;
+	status = "okay";
+};
