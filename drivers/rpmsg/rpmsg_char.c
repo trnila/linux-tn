@@ -57,6 +57,9 @@ struct rpmsg_ctrldev {
 	struct rpmsg_device *rpdev;
 	struct cdev cdev;
 	struct device dev;
+
+	int destroying;
+	struct mutex create_ept_mutex;
 };
 
 /**
@@ -335,6 +338,7 @@ ATTRIBUTE_GROUPS(rpmsg_eptdev);
 static void rpmsg_eptdev_release_device(struct device *dev)
 {
 	struct rpmsg_eptdev *eptdev = dev_to_eptdev(dev);
+	printk("releasing");
 
 	ida_simple_remove(&rpmsg_ept_ida, dev->id);
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(eptdev->dev.devt));
@@ -349,6 +353,15 @@ static int rpmsg_eptdev_create(struct rpmsg_ctrldev *ctrldev,
 	struct rpmsg_eptdev *eptdev;
 	struct device *dev;
 	int ret;
+
+	printk("create new\n");
+
+	mutex_lock(&ctrldev->create_ept_mutex);
+	if(ctrldev->destroying) {
+		mutex_unlock(&ctrldev->create_ept_mutex);
+		printk("nope, wont create when we are destroying.....\n");
+		return -1;
+	}
 
 	eptdev = kzalloc(sizeof(*eptdev), GFP_KERNEL);
 	if (!eptdev)
@@ -396,6 +409,7 @@ static int rpmsg_eptdev_create(struct rpmsg_ctrldev *ctrldev,
 		put_device(dev);
 	}
 
+	mutex_unlock(&ctrldev->create_ept_mutex);
 	return ret;
 
 free_ept_ida:
@@ -405,6 +419,7 @@ free_minor_ida:
 free_eptdev:
 	put_device(dev);
 	kfree(eptdev);
+	mutex_unlock(&ctrldev->create_ept_mutex);
 
 	return ret;
 }
@@ -465,6 +480,8 @@ static void rpmsg_ctrldev_release_device(struct device *dev)
 	ida_simple_remove(&rpmsg_minor_ida, MINOR(dev->devt));
 	cdev_del(&ctrldev->cdev);
 	kfree(ctrldev);
+
+	printk("released ctrldev\n");
 }
 
 static int rpmsg_chrdev_probe(struct rpmsg_device *rpdev)
@@ -483,6 +500,11 @@ static int rpmsg_chrdev_probe(struct rpmsg_device *rpdev)
 	device_initialize(dev);
 	dev->parent = &rpdev->dev;
 	dev->class = rpmsg_class;
+
+	printk("probing ctrldev\n");
+
+	mutex_init(&ctrldev->create_ept_mutex);
+	ctrldev->destroying = 0;
 
 	cdev_init(&ctrldev->cdev, &rpmsg_ctrldev_fops);
 	ctrldev->cdev.owner = THIS_MODULE;
@@ -531,13 +553,23 @@ static void rpmsg_chrdev_remove(struct rpmsg_device *rpdev)
 	struct rpmsg_ctrldev *ctrldev = dev_get_drvdata(&rpdev->dev);
 	int ret;
 
+	printk("Destroy requested\n");
+
+	mutex_lock(&ctrldev->create_ept_mutex);
+	ctrldev->destroying = 1;
+	mutex_unlock(&ctrldev->create_ept_mutex);
+
 	/* Destroy all endpoints */
 	ret = device_for_each_child(&ctrldev->dev, NULL, rpmsg_eptdev_destroy);
 	if (ret)
 		dev_warn(&rpdev->dev, "failed to nuke endpoints: %d\n", ret);
 
+	printk("Destroy ok\n");
+
+	mutex_destroy(&ctrldev->create_ept_mutex);
 	device_del(&ctrldev->dev);
 	put_device(&ctrldev->dev);
+
 }
 
 static struct rpmsg_driver rpmsg_chrdev_driver = {
