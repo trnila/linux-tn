@@ -544,6 +544,12 @@ static int mxc_gpio_probe(struct platform_device *pdev)
 	port->gc.base = (pdev->id < 0) ? of_alias_get_id(np, "gpio") * 32 :
 					     pdev->id * 32;
 
+	port->gc.label = devm_kasprintf(&pdev->dev, GFP_KERNEL, "GPIO%d", of_alias_get_id(np, "gpio") + 1);
+	if (!port->gc.label) {
+	err = -ENOMEM;
+		goto out_bgio;
+	}
+
 	err = devm_gpiochip_add_data(&pdev->dev, &port->gc, port);
 	if (err)
 		goto out_bgio;
