@@ -292,6 +292,7 @@ static int imx_pwm_probe(struct platform_device *pdev)
 	struct imx_chip *imx;
 	struct resource *r;
 	int ret = 0;
+	int alias;
 
 	if (!of_id)
 		return -ENODEV;
@@ -319,6 +320,11 @@ static int imx_pwm_probe(struct platform_device *pdev)
 	imx->chip.base = -1;
 	imx->chip.npwm = 1;
 	imx->chip.can_sleep = true;
+
+	alias = of_alias_get_id(pdev->dev.of_node, "pwm");
+	if(alias >= 0) {
+		imx->chip.base = alias + 1;
+	}
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	imx->mmio_base = devm_ioremap_resource(&pdev->dev, r);

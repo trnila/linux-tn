@@ -44,6 +44,10 @@
 		gpio4 = &gpio5;
 		dsi_phy0 = &mipi_dsi_phy;
 		mipi_dsi0 = &mipi_dsi;
+		pwm0 = &pwm1;
+		pwm1 = &pwm2;
+		pwm2 = &pwm3;
+		pwm3 = &pwm4;
 	};
 
 	cpus {
