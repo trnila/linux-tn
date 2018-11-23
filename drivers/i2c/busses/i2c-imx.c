@@ -1060,7 +1060,7 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct imxi2c_platform_data *pdata = dev_get_platdata(&pdev->dev);
 	void __iomem *base;
-	int irq, ret;
+	int irq, ret, alias;
 	dma_addr_t phy_addr;
 
 	dev_dbg(&pdev->dev, "<%s>\n", __func__);
@@ -1092,7 +1092,8 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	i2c_imx->adapter.owner		= THIS_MODULE;
 	i2c_imx->adapter.algo		= &i2c_imx_algo;
 	i2c_imx->adapter.dev.parent	= &pdev->dev;
-	i2c_imx->adapter.nr		= pdev->id;
+	alias = of_alias_get_id(pdev->dev.of_node, "i2c");
+	i2c_imx->adapter.nr		= alias >= 0 ? alias + 1 : pdev->id;
 	i2c_imx->adapter.dev.of_node	= pdev->dev.of_node;
 	i2c_imx->base			= base;
 
