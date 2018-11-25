@@ -1,0 +1,58 @@
+#include "pico-8m.dts"
+
+&iomuxc {
+	pinctrl-names = "default";
+
+	pico-8m {
+		pinctrl_ecspi1: ecspi1grp {
+			fsl,pins = <
+				MX8MQ_IOMUXC_ECSPI1_MISO_ECSPI1_MISO   0x19
+				MX8MQ_IOMUXC_ECSPI1_MOSI_ECSPI1_MOSI   0x19
+				MX8MQ_IOMUXC_ECSPI1_SCLK_ECSPI1_SCLK   0x19
+			>;
+		};
+		pinctrl_ecspi1_cs: ecspi1grp_cs {
+			fsl,pins = <
+				MX8MQ_IOMUXC_ECSPI1_SS0_ECSPI1_SS0     0x19 /* hw CS0 */
+				MX8MQ_IOMUXC_NAND_READY_B_GPIO3_IO16   0x19 /* CS 1 */
+				MX8MQ_IOMUXC_SAI2_RXD0_GPIO4_IO23      0x19 /* CS 2*/
+			>;
+		};
+	};
+};
+
+&ecspi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1 &pinctrl_ecspi1_cs>;
+	status = "okay";
+
+	num-cs = <3>;
+	cs-gpios =
+		<0>,  /* hw CS0 */
+		<&gpio3 16 GPIO_ACTIVE_LOW> /* CS1 */,
+		<&gpio4 23 GPIO_ACTIVE_LOW>; /* CS2 */
+
+	spidev@0 {
+		compatible = "spidev";
+		reg = <0>;	/* CS0 */
+		spi-max-frequency = <500000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	spidev@1 {
+		compatible = "spidev";
+		reg = <1>;	/* CS1 */
+		spi-max-frequency = <500000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	spidev@2 {
+		compatible = "spidev";
+		reg = <2>;	/* CS2 */
+		spi-max-frequency = <500000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+};
