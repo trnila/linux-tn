@@ -1093,7 +1093,7 @@ static int i2c_imx_probe(struct platform_device *pdev)
 	i2c_imx->adapter.algo		= &i2c_imx_algo;
 	i2c_imx->adapter.dev.parent	= &pdev->dev;
 	alias = of_alias_get_id(pdev->dev.of_node, "i2c");
-	i2c_imx->adapter.nr		= alias >= 0 ? alias + 1 : pdev->id;
+	i2c_imx->adapter.nr		= alias >= 0 ? alias : pdev->id;
 	i2c_imx->adapter.dev.of_node	= pdev->dev.of_node;
 	i2c_imx->base			= base;
 

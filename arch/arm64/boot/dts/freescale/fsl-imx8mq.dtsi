@@ -44,14 +44,14 @@
 		gpio4 = &gpio5;
 		dsi_phy0 = &mipi_dsi_phy;
 		mipi_dsi0 = &mipi_dsi;
-		pwm0 = &pwm1;
-		pwm1 = &pwm2;
-		pwm2 = &pwm3;
-		pwm3 = &pwm4;
-		i2c0 = &i2c1;
-		i2c1 = &i2c2;
-		i2c2 = &i2c3;
-		i2c3 = &i2c4;
+		pwm1 = &pwm1;
+		pwm2 = &pwm2;
+		pwm3 = &pwm3;
+		pwm4 = &pwm4;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		i2c3 = &i2c3;
+		i2c4 = &i2c4;
 		spi1 = &ecspi1;
 	};
 

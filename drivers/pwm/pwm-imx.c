@@ -323,7 +323,7 @@ static int imx_pwm_probe(struct platform_device *pdev)
 
 	alias = of_alias_get_id(pdev->dev.of_node, "pwm");
 	if(alias >= 0) {
-		imx->chip.base = alias + 1;
+		imx->chip.base = alias;
 	}
 
 	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
