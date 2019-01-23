@@ -26,6 +26,11 @@
 		};
 
 	};
+
+	imx7d-cm4 {
+		compatible	= "fsl,imx7d-cm4";
+		syscon		= <&src>;
+	};
 };
 
 &i2c1 {
