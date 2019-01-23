@@ -31,6 +31,8 @@
 					 | IMX7D_SW_M4C_RST)
 #define IMX7D_M4_STOP			IMX7D_SW_M4C_NON_SCLR_RST
 
+#define IMX8M_M4_STOP			(IMX7D_ENABLE_M4 | IMX7D_SW_M4C_NON_SCLR_RST)
+
 /* Address: 0x020D8000 */
 #define IMX6SX_SRC_SCR			0x00
 #define IMX6SX_ENABLE_M4		BIT(22)
@@ -89,6 +91,16 @@ struct imx_rproc {
 	struct clk			*clk;
 };
 
+static const struct imx_rproc_att imx_rproc_att_imx8m[] = {
+	/* dev addr , sys addr  , size	    , flags */
+	/* TCML (Code) */
+	{ 0x1FFE0000, 0x007E0000, 0x00020000, ATT_OWN },
+	/* TCMU (Data) */
+	{ 0x20000000, 0x00800000, 0x00020000, ATT_OWN },
+	/* DDR (Data) */
+	{ 0x40000000, 0x40000000, 0xc0000000, 0 },
+};
+
 static const struct imx_rproc_att imx_rproc_att_imx7d[] = {
 	/* dev addr , sys addr  , size	    , flags */
 	/* OCRAM_S (M4 Boot code) - alias */
@@ -137,6 +149,15 @@ static const struct imx_rproc_att imx_rproc_att_imx6sx[] = {
 	{ 0x208F8000, 0x008F8000, 0x00004000, 0 },
 	/* DDR (Data) */
 	{ 0x80000000, 0x80000000, 0x60000000, 0 },
+};
+
+static const struct imx_rproc_dcfg imx_rproc_cfg_imx8m = {
+	.src_reg	= IMX7D_SRC_SCR,
+	.src_mask	= IMX7D_M4_RST_MASK,
+	.src_start	= IMX7D_M4_START,
+	.src_stop	= IMX8M_M4_STOP,
+	.att		= imx_rproc_att_imx8m,
+	.att_size	= ARRAY_SIZE(imx_rproc_att_imx8m),
 };
 
 static const struct imx_rproc_dcfg imx_rproc_cfg_imx7d = {
@@ -356,19 +377,19 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	}
 
 	priv->clk = devm_clk_get(dev, NULL);
-	if (IS_ERR(priv->clk)) {
+	if (!IS_ERR(priv->clk)) {
+		/*
+		 * clk for M4 block including memory. Should be
+		 * enabled before .start for FW transfer.
+		 */
+		ret = clk_prepare_enable(priv->clk);
+		if (ret) {
+			dev_err(&rproc->dev, "Failed to enable clock\n");
+			goto err_put_rproc;
+		}
+	} else if(PTR_ERR(priv->clk != -ENOENT)) {
 		dev_err(dev, "Failed to get clock\n");
 		ret = PTR_ERR(priv->clk);
-		goto err_put_rproc;
-	}
-
-	/*
-	 * clk for M4 block including memory. Should be
-	 * enabled before .start for FW transfer.
-	 */
-	ret = clk_prepare_enable(priv->clk);
-	if (ret) {
-		dev_err(&rproc->dev, "Failed to enable clock\n");
 		goto err_put_rproc;
 	}
 
@@ -401,6 +422,7 @@ static int imx_rproc_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id imx_rproc_of_match[] = {
+	{ .compatible = "fsl,imx8m-cm4", .data = &imx_rproc_cfg_imx8m },
 	{ .compatible = "fsl,imx7d-cm4", .data = &imx_rproc_cfg_imx7d },
 	{ .compatible = "fsl,imx6sx-cm4", .data = &imx_rproc_cfg_imx6sx },
 	{},
