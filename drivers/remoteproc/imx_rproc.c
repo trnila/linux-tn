@@ -13,9 +13,12 @@
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
+#include <linux/mx8_mu.h>
+#include "remoteproc_internal.h"
 
 #define IMX7D_SRC_SCR			0x0C
 #define IMX7D_ENABLE_M4			BIT(3)
@@ -89,6 +92,7 @@ struct imx_rproc {
 	const struct imx_rproc_dcfg	*dcfg;
 	struct imx_rproc_mem		mem[IMX7D_RPROC_MEM_MAX];
 	struct clk			*clk;
+	void __iomem  *mu_base;
 };
 
 static const struct imx_rproc_att imx_rproc_att_imx8m[] = {
@@ -185,6 +189,9 @@ static int imx_rproc_start(struct rproc *rproc)
 	struct device *dev = priv->dev;
 	int ret;
 
+	MU_Init(priv->mu_base);
+	MU_EnableRxFullInt(priv->mu_base, 1);
+
 	ret = regmap_update_bits(priv->regmap, dcfg->src_reg,
 				 dcfg->src_mask, dcfg->src_start);
 	if (ret)
@@ -263,10 +270,17 @@ static void *imx_rproc_da_to_va(struct rproc *rproc, u64 da, int len)
 	return va;
 }
 
+static void imx_rproc_kick(struct rproc *rproc, int vqid) {
+	struct imx_rproc *priv = rproc->priv;
+	// TODO: do we need to lock?
+	MU_SendMessage(priv->mu_base, 1, vqid << 16);
+}
+
 static const struct rproc_ops imx_rproc_ops = {
 	.start		= imx_rproc_start,
 	.stop		= imx_rproc_stop,
 	.da_to_va       = imx_rproc_da_to_va,
+	.kick           = imx_rproc_kick,
 };
 
 static int imx_rproc_addr_init(struct imx_rproc *priv,
@@ -332,16 +346,42 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
 	return 0;
 }
 
+static irqreturn_t imx_rproc_mu_isr(int irq, void *param)
+{
+	u32 irqs, message;
+	unsigned int i;
+	struct imx_rproc *priv = (struct imx_rproc*) param;
+
+	irqs = MU_ReadStatus(priv->mu_base);
+
+	if(irqs & (1 << 26)) {
+		MU_ReceiveMsg(priv->mu_base, 1, &message);
+		return IRQ_WAKE_THREAD;
+	}
+
+	return IRQ_NONE;
+}
+
+static irqreturn_t imx_rproc_mu_thread_isr(int irq, void *param) {
+	struct imx_rproc *priv = (struct imx_rproc*) param;
+	//TODO: interrupt only vq that triggered non-threaded irq
+	rproc_vq_interrupt(priv->rproc, 1);
+	return rproc_vq_interrupt(priv->rproc, 0);
+}
+
 static int imx_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
+	struct device_node *np_mu;
 	struct imx_rproc *priv;
 	struct rproc *rproc;
 	struct regmap_config config = { .name = "imx-rproc" };
 	const struct imx_rproc_dcfg *dcfg;
 	struct regmap *regmap;
 	int ret;
+	struct clk *clk;
+	unsigned int irq;
 
 	regmap = syscon_regmap_lookup_by_phandle(np, "syscon");
 	if (IS_ERR(regmap)) {
@@ -390,6 +430,38 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	} else if(PTR_ERR(priv->clk != -ENOENT)) {
 		dev_err(dev, "Failed to get clock\n");
 		ret = PTR_ERR(priv->clk);
+		goto err_put_rproc;
+	}
+
+	// initialize messaging unit
+	np_mu = of_find_compatible_node(NULL, NULL, "fsl,imx6sx-mu");
+	if (!np_mu) {
+		pr_info("Cannot find MU-RPMSG entry in device tree\n");
+		ret = -EINVAL;
+		goto err_put_rproc;
+	}
+	irq = of_irq_get(np_mu, 0);
+	ret = devm_request_threaded_irq(dev, irq, imx_rproc_mu_isr, imx_rproc_mu_thread_isr,
+			  IRQF_EARLY_RESUME | IRQF_SHARED,
+			  "imx-rproc", priv);
+	if (ret) {
+		pr_err("%s: register interrupt %d failed, rc %d\n",
+			__func__, irq, ret);
+		return ret;
+	}
+	clk = of_clk_get(np_mu, 0);
+	if (IS_ERR(clk)) {
+		pr_err("mu clock source missing or invalid\n");
+		return PTR_ERR(clk);
+	}
+	ret = clk_prepare_enable(clk);
+	if (ret) {
+		pr_err("unable to enable mu clock\n");
+		return ret;
+	}
+	priv->mu_base = of_iomap(np_mu, 0);
+	if(IS_ERR(priv->mu_base)) {
+		dev_err(dev, "Failed to map mu_base");
 		goto err_put_rproc;
 	}
 

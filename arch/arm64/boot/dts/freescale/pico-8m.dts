@@ -840,7 +840,7 @@
 	 */
 	vdev-nums = <1>;
 	reg = <0x0 0xb8000000 0x0 0x10000>;
-	status = "okay";
+	status = "disabled";
 };
 
 &A53_0 {
