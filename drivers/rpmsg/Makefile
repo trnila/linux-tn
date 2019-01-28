@@ -6,3 +6,4 @@ obj-$(CONFIG_RPMSG_VIRTIO)	+= virtio_rpmsg_bus.o
 obj-m += imx_rpmsg.o
 obj-$(CONFIG_IMX_RPMSG_PINGPONG)	+= imx_rpmsg_pingpong.o
 obj-$(CONFIG_IMX_RPMSG_TTY)	+= imx_rpmsg_tty.o
+obj-m                           += rpmsg_m4char.o
