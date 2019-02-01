@@ -350,7 +350,6 @@ static int imx_rproc_addr_init(struct imx_rproc *priv,
 static irqreturn_t imx_rproc_mu_isr(int irq, void *param)
 {
 	u32 irqs, message;
-	unsigned int i;
 	struct imx_rproc *priv = (struct imx_rproc*) param;
 
 	irqs = MU_ReadStatus(priv->mu_base);
@@ -434,7 +433,7 @@ static int imx_rproc_probe(struct platform_device *pdev)
 			dev_err(&rproc->dev, "Failed to enable clock\n");
 			goto err_put_rproc;
 		}
-	} else if(PTR_ERR(priv->clk != -ENOENT)) {
+	} else if(PTR_ERR(priv->clk) != -ENOENT) {
 		dev_err(dev, "Failed to get clock\n");
 		ret = PTR_ERR(priv->clk);
 		goto err_put_rproc;
