@@ -35,6 +35,7 @@
 	imx8m-cm4 {
 		compatible = "fsl,imx8m-cm4";
 		syscon = <&src>;
+		memory-region = <&rpmsg_reserved>;
 	};
 
 	regulators {
@@ -841,6 +842,10 @@
 	vdev-nums = <1>;
 	reg = <0x0 0xb8000000 0x0 0x10000>;
 	status = "disabled";
+};
+
+&rpmsg_reserved {
+	compatible = "shared-dma-pool";
 };
 
 &A53_0 {

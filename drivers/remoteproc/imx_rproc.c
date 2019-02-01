@@ -18,6 +18,7 @@
 #include <linux/regmap.h>
 #include <linux/remoteproc.h>
 #include <linux/mx8_mu.h>
+#include <linux/of_reserved_mem.h>
 #include "remoteproc_internal.h"
 
 #define IMX7D_SRC_SCR			0x0C
@@ -409,6 +410,12 @@ static int imx_rproc_probe(struct platform_device *pdev)
 	priv->dev = dev;
 
 	dev_set_drvdata(dev, rproc);
+
+	ret = of_reserved_mem_device_init(dev);
+	if(ret != 0 && ret != ENODEV) {
+		dev_err(dev, "Could not get reserved memory: %d\n", ret);
+		goto err_put_rproc;
+	}
 
 	ret = imx_rproc_addr_init(priv, pdev);
 	if (ret) {
