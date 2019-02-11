@@ -1,0 +1,53 @@
+#include "pico-8m.dts"
+
+&iomuxc {
+//	pinctrl-names = "default";
+//	pinctrl-0 = <&linecam_control>;
+	pico-8m {
+		pinctrl_ecspi1: ecspi1grp {
+			fsl,pins = <
+				MX8MQ_IOMUXC_ECSPI1_MISO_ECSPI1_MISO   0x19
+				MX8MQ_IOMUXC_ECSPI1_MOSI_ECSPI1_MOSI   0x19
+				MX8MQ_IOMUXC_ECSPI1_SCLK_ECSPI1_SCLK   0x19
+			>;
+		};
+		pinctrl_ecspi1_cs: ecspi1grp_cs {
+			fsl,pins = <
+				MX8MQ_IOMUXC_ECSPI1_SS0_ECSPI1_SS0     0x19 /* hw CS0 */
+			>;
+		};
+		/* set pinmux to CAM_SI and CAM_CLK to GPIO, so we can use them from userspace */
+		pinctrl_linecam: linecamgrp {
+			fsl,pins = <
+		  	MX8MQ_IOMUXC_SAI2_RXD0_GPIO4_IO23 0x30 /* CAM_SI */
+				MX8MQ_IOMUXC_SAI2_TXD0_GPIO4_IO26 0x30 /* CAM_CLK */
+			>;
+		};
+	};
+};
+
+&ov5645_mipi2 {
+	status = "disabled";
+};
+
+&sai2 {
+	status = "disabled";
+};
+
+
+&ecspi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_ecspi1 &pinctrl_ecspi1_cs>;
+	status = "okay";
+
+	num-cs = <1>;
+	cs-gpios = <0>;  /* hw CS0 */
+
+	spidev@0 {
+		compatible = "spidev";
+		reg = <0>;	/* CS0 */
+		spi-max-frequency = <12000000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+};
