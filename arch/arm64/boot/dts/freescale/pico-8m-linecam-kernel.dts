@@ -1,0 +1,9 @@
+#include "pico-8m-linecam.dts"
+
+&linecam {
+	status = "okay";
+};
+
+&linecam_spidev {
+	status = "disabled";
+};
