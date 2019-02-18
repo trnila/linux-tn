@@ -19,6 +19,7 @@
 #include <linux/remoteproc.h>
 #include <linux/mx8_mu.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/delay.h>
 #include "remoteproc_internal.h"
 
 #define IMX7D_SRC_SCR			0x0C
@@ -52,6 +53,9 @@
 					 | IMX6SX_SW_M4C_RST)
 
 #define IMX7D_RPROC_MEM_MAX		8
+
+/* use mu general interrupt for notification about stop, so m4 core can stop PWM */
+#define MU_STOP_GI 3
 
 /**
  * struct imx_rproc_mem - slim internal memory structure
@@ -207,6 +211,13 @@ static int imx_rproc_stop(struct rproc *rproc)
 	const struct imx_rproc_dcfg *dcfg = priv->dcfg;
 	struct device *dev = priv->dev;
 	int ret;
+	uint32_t reg;
+
+	// notify m4 core about stop 
+	reg = readl_relaxed(priv->mu_base + MU_ACR_OFFSET1);
+	reg |= (MU_CR_GIRn_MASK1 >> MU_STOP_GI) & MU_CR_GIRn_MASK1;
+	writel_relaxed(reg, priv->mu_base + MU_ACR_OFFSET1);
+	msleep(100);
 
 	ret = regmap_update_bits(priv->regmap, dcfg->src_reg,
 				 dcfg->src_mask, dcfg->src_stop);
