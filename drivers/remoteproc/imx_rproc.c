@@ -19,7 +19,7 @@
 #include <linux/remoteproc.h>
 #include <linux/mx8_mu.h>
 #include <linux/of_reserved_mem.h>
-#include <linux/delay.h>
+#include <linux/completion.h>
 #include "remoteproc_internal.h"
 
 #define IMX7D_SRC_SCR			0x0C
@@ -98,6 +98,7 @@ struct imx_rproc {
 	struct imx_rproc_mem		mem[IMX7D_RPROC_MEM_MAX];
 	struct clk			*clk;
 	void __iomem  *mu_base;
+	struct completion cleanup_completed;
 };
 
 static const struct imx_rproc_att imx_rproc_att_imx8m[] = {
@@ -213,11 +214,17 @@ static int imx_rproc_stop(struct rproc *rproc)
 	int ret;
 	uint32_t reg;
 
+	init_completion(&priv->cleanup_completed);
+	MU_EnableGeneralInt(priv->mu_base, MU_STOP_GI);
+
 	// notify m4 core about stop 
 	reg = readl_relaxed(priv->mu_base + MU_ACR_OFFSET1);
 	reg |= (MU_CR_GIRn_MASK1 >> MU_STOP_GI) & MU_CR_GIRn_MASK1;
 	writel_relaxed(reg, priv->mu_base + MU_ACR_OFFSET1);
-	msleep(100);
+
+	if(!wait_for_completion_timeout(&priv->cleanup_completed, msecs_to_jiffies(100))) {
+		dev_warn(dev, "timed out while waiting for cleanup");
+	}
 
 	ret = regmap_update_bits(priv->regmap, dcfg->src_reg,
 				 dcfg->src_mask, dcfg->src_stop);
@@ -362,12 +369,23 @@ static irqreturn_t imx_rproc_mu_isr(int irq, void *param)
 {
 	u32 irqs, message;
 	struct imx_rproc *priv = (struct imx_rproc*) param;
+	uint32_t reg;
 
 	irqs = MU_ReadStatus(priv->mu_base);
 
 	if(irqs & (1 << 26)) {
 		MU_ReceiveMsg(priv->mu_base, 1, &message);
 		return IRQ_WAKE_THREAD;
+	}
+
+	// stop cleanup done
+	if(irqs & (1 << 28)) {
+		// clear irq
+		reg = readl_relaxed(priv->mu_base + MU_ASR_OFFSET1);
+		reg |= (MU_CR_GIRn_MASK1 >> MU_STOP_GI) & MU_CR_GIRn_MASK1;
+		writel_relaxed(reg, priv->mu_base + MU_ASR_OFFSET1);
+
+		complete(&priv->cleanup_completed);
 	}
 
 	return IRQ_NONE;
