@@ -108,12 +108,12 @@ static ssize_t dev_write(struct file *filep, const char __user *buffer, size_t l
 		return -EINVAL;
 	}
 
-	if(copy_from_user(tx_buffer, buffer, len)) {
-		return -EFAULT;
-	}
-
 	if(mutex_lock_interruptible(&mtx)) {
 		return -ERESTARTSYS;
+	}
+
+	if(copy_from_user(tx_buffer, buffer, len)) {
+		return -EFAULT;
 	}
 
 	if(!rpmsg_device) {
