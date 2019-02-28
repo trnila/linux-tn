@@ -129,6 +129,7 @@ static ssize_t rpmsg_m4char_char_write(struct file *filep, const char __user *bu
 	}
 
 	if(copy_from_user(tx_buffer, buffer, len)) {
+		mutex_unlock(&mtx);
 		return -EFAULT;
 	}
 
