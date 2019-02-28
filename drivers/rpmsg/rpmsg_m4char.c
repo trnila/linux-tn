@@ -120,6 +120,7 @@ static ssize_t rpmsg_m4char_char_read(struct file *filep, char *buf, size_t len,
 }
 
 static ssize_t rpmsg_m4char_char_write(struct file *filep, const char __user *buffer, size_t len, loff_t *offset) {
+	int err;
 	if(len >= MAX_SIZE) {
 		return -EINVAL;
 	}
@@ -138,9 +139,9 @@ static ssize_t rpmsg_m4char_char_write(struct file *filep, const char __user *bu
 		return -EPIPE;
 	}
 
-	rpmsg_send(rpmsg_device->ept, tx_buffer, len);
+	err = rpmsg_trysend(rpmsg_device->ept, tx_buffer, len);
 	mutex_unlock(&mtx);
-	return len;
+	return err == 0 ? len : err;
 }
 
 static struct file_operations fops =
