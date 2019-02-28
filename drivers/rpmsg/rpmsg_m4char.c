@@ -24,7 +24,6 @@ static char* tx_buffer[MAX_SIZE];
 static int rpmsg_m4char_cb(struct rpmsg_device *rpdev, void *data, int len,
 						void *priv, u32 src)
 {
-	int err;
 	struct sk_buff *skb;
 
 	skb = alloc_skb(len, GFP_ATOMIC);
@@ -63,11 +62,7 @@ static void rpmsg_m4char_remove(struct rpmsg_device *rpdev)
 	dev_info(&rpdev->dev, "rpmsg_m4char removed from channel\n");
 }
 
-static int dev_open(struct inode *inodep, struct file *filep) {
-	return 0;
-}
-
-static ssize_t dev_read(struct file *filep, char *buf, size_t len, loff_t *offset){
+static ssize_t rpmsg_m4char_char_read(struct file *filep, char *buf, size_t len, loff_t *offset){
 	unsigned long flags;
 	struct sk_buff *skb;
 	int use;
@@ -103,7 +98,7 @@ static ssize_t dev_read(struct file *filep, char *buf, size_t len, loff_t *offse
 	return use;
 }
 
-static ssize_t dev_write(struct file *filep, const char __user *buffer, size_t len, loff_t *offset) {
+static ssize_t rpmsg_m4char_char_write(struct file *filep, const char __user *buffer, size_t len, loff_t *offset) {
 	if(len >= MAX_SIZE) {
 		return -EINVAL;
 	}
@@ -126,29 +121,22 @@ static ssize_t dev_write(struct file *filep, const char __user *buffer, size_t l
 	return len;
 }
 
-static int dev_release(struct inode *inodep, struct file *filep){
-	return 0;
-}
-
 static struct file_operations fops =
 {
-	.open = dev_open,
-	.read = dev_read,
-	.write = dev_write,
-	.release = dev_release,
+	.read = rpmsg_m4char_char_read,
+	.write = rpmsg_m4char_char_write,
 };
 
-
-static struct rpmsg_device_id rpmsg_driver_pingpong_id_table[] = {
+static struct rpmsg_device_id rpmsg_driver_m4char_id_table[] = {
 	{ .name	= "m4-channel" },
 	{ },
 };
-MODULE_DEVICE_TABLE(rpmsg, rpmsg_driver_pingpong_id_table);
+MODULE_DEVICE_TABLE(rpmsg, rpmsg_driver_m4char_id_table);
 
 static struct rpmsg_driver rpmsg_m4char_driver = {
 	.drv.name	= KBUILD_MODNAME,
 	.drv.owner	= THIS_MODULE,
-	.id_table	= rpmsg_driver_pingpong_id_table,
+	.id_table	= rpmsg_driver_m4char_id_table,
 	.probe		= rpmsg_m4char_probe,
 	.callback	= rpmsg_m4char_cb,
 	.remove		= rpmsg_m4char_remove,
