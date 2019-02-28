@@ -123,6 +123,7 @@ static ssize_t rpmsg_m4char_char_write(struct file *filep, const char __user *bu
 
 static struct file_operations fops =
 {
+	.owner = THIS_MODULE,
 	.read = rpmsg_m4char_char_read,
 	.write = rpmsg_m4char_char_write,
 };
