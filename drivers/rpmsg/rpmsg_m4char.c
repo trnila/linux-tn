@@ -6,7 +6,14 @@
 
 #define DEVICE_NAME "m4char"
 
+/* maximal size of rpmsg buffer */
 #define MAX_SIZE 512
+
+/* 
+ * maximal number of messages waiting for user to read
+ * otherwise we can run out of memory
+ */
+#define MAX_AWAITING_MESSAGES 10000 
 
 static int major;
 static struct class* char_class  = NULL;
@@ -21,10 +28,24 @@ static struct mutex mtx;
 
 static char* tx_buffer[MAX_SIZE];
 
+static atomic_t dropped_count;
+
 static int rpmsg_m4char_cb(struct rpmsg_device *rpdev, void *data, int len,
 						void *priv, u32 src)
 {
 	struct sk_buff *skb;
+	uint32_t awaiting_messages;
+	uint32_t dropped;
+
+	spin_lock(&queue_lock);
+	awaiting_messages = skb_queue_len(&queue);
+	spin_unlock(&queue_lock);
+
+	if(awaiting_messages >= MAX_AWAITING_MESSAGES) {
+		dropped = atomic_inc_return(&dropped_count);
+		printk_ratelimited("no available buffer, dropped rpmsg count %u\n", dropped);
+		return -ENOBUFS;
+	}
 
 	skb = alloc_skb(len, GFP_ATOMIC);
 	if (!skb)
