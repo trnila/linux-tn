@@ -188,6 +188,23 @@ static const struct rpmsg_endpoint_ops virtio_endpoint_ops = {
 	.get_buffer_size = virtio_get_buffer_size,
 };
 
+
+typedef void (*rpmsg_trace_cb)(void*, unsigned int);
+rpmsg_trace_cb tracer_cb;
+
+void rpmsg_set_tracer(rpmsg_trace_cb cb) {
+	printk("installing tracer\n");
+	tracer_cb = cb;
+}
+EXPORT_SYMBOL(rpmsg_set_tracer);
+
+void rpmsg_detach_tracer(void) {
+	tracer_cb = NULL;
+
+}
+EXPORT_SYMBOL(rpmsg_detach_tracer);
+
+
 /**
  * rpmsg_sg_init - initialize scatterlist according to cpu address location
  * @sg: scatterlist to fill
@@ -789,6 +806,9 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 	}
 
 	while (msg) {
+		if(tracer_cb) {
+			tracer_cb(msg, len);
+		}
 		err = rpmsg_recv_single(vrp, dev, msg, len);
 		if (err)
 			break;
