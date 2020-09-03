@@ -644,6 +644,9 @@ static int rpmsg_send_offchannel_raw(struct rpmsg_device *rpdev,
 	dynamic_hex_dump("rpmsg_virtio TX: ", DUMP_PREFIX_NONE, 16, 1,
 			 msg, sizeof(*msg) + msg->len, true);
 #endif
+	if(tracer_cb) {
+		tracer_cb(msg, len);
+	}
 
 	rpmsg_sg_init(&sg, msg, sizeof(*msg) + len);
 
