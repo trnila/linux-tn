@@ -180,10 +180,6 @@ static inline struct mon_bin_hdr *MON_OFF2HDR(const struct mon_reader_bin *rp,
 
 #define MON_RING_EMPTY(rp)	((rp)->b_cnt == 0)
 
-static unsigned char xfer_to_pipe[4] = {
-	PIPE_CONTROL, PIPE_ISOCHRONOUS, PIPE_BULK, PIPE_INTERRUPT
-};
-
 static struct class *mon_bin_class;
 static dev_t mon_bin_dev0;
 static struct cdev mon_bin_cdev;
@@ -370,83 +366,18 @@ static inline char mon_bin_get_setup(unsigned char *setupb,
 	return 0;
 }
 
-static unsigned int mon_bin_get_data(const struct mon_reader_bin *rp,
-    unsigned int offset, struct urb *urb, unsigned int length,
-    char *flag)
-{
-	int i;
-	struct scatterlist *sg;
-	unsigned int this_len;
-
-	*flag = 0;
-	if (urb->num_sgs == 0) {
-		if (urb->transfer_buffer == NULL) {
-			*flag = 'Z';
-			return length;
-		}
-		mon_copy_to_buff(rp, offset, urb->transfer_buffer, length);
-		length = 0;
-
-	} else {
-		/* If IOMMU coalescing occurred, we cannot trust sg_page */
-		if (urb->transfer_flags & URB_DMA_SG_COMBINED) {
-			*flag = 'D';
-			return length;
-		}
-
-		/* Copy up to the first non-addressable segment */
-		for_each_sg(urb->sg, sg, urb->num_sgs, i) {
-			if (length == 0 || PageHighMem(sg_page(sg)))
-				break;
-			this_len = min_t(unsigned int, sg->length, length);
-			offset = mon_copy_to_buff(rp, offset, sg_virt(sg),
-					this_len);
-			length -= this_len;
-		}
-		if (i == 0)
-			*flag = 'D';
-	}
-
-	return length;
-}
-
-/*
- * This is the look-ahead pass in case of 'C Zi', when actual_length cannot
- * be used to determine the length of the whole contiguous buffer.
- */
-static unsigned int mon_bin_collate_isodesc(const struct mon_reader_bin *rp,
-    struct urb *urb, unsigned int ndesc)
-{
-	struct usb_iso_packet_descriptor *fp;
-	unsigned int length;
-
-	length = 0;
-	fp = urb->iso_frame_desc;
-	while (ndesc-- != 0) {
-		if (fp->actual_length != 0) {
-			if (fp->offset + fp->actual_length > length)
-				length = fp->offset + fp->actual_length;
-		}
-		fp++;
-	}
-	return length;
-}
-
 static void cb(void *data, unsigned int l) {
-	if(!rp) return;
 	struct timespec64 ts;
 	unsigned long flags;
-	unsigned int urb_length;
 	unsigned int offset;
 	unsigned int delta;
 	struct mon_bin_hdr *ep;
 	struct rpmsg_hdr *hdr = data;
-
 	unsigned int length = hdr->len;
-	printk("len: %d\n", length);
+
+	if(!rp) return;
 
 	ktime_get_real_ts64(&ts);
-
 	spin_lock_irqsave(&rp->b_lock, flags);
 
 	if (length >= rp->b_size/5)
@@ -552,7 +483,7 @@ static int mon_bin_get_event(struct file *file, struct mon_reader_bin *rp,
 		return -EFAULT;
 	}
 
-	step_len = min(ep->hdr.len, nbytes);
+	step_len = min((unsigned int) ep->hdr.len, nbytes);
 	step_len = nbytes;
 	if ((offset = rp->b_out + PKT_SIZE) >= rp->b_size) offset = 0;
 
@@ -771,7 +702,6 @@ static int mon_bin_queued(struct mon_reader_bin *rp)
  */
 static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-#if 0
 	struct mon_reader_bin *rp = file->private_data;
 	// struct mon_bus* mbus = rp->r.m_bus;
 	int ret = 0;
@@ -787,7 +717,7 @@ static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		spin_lock_irqsave(&rp->b_lock, flags);
 		if (!MON_RING_EMPTY(rp)) {
 			ep = MON_OFF2HDR(rp, rp->b_out);
-			ret = ep->len;
+			ret = ep->hdr.len;
 		}
 		spin_unlock_irqrestore(&rp->b_lock, flags);
 		break;
@@ -861,7 +791,7 @@ static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 		if (getb.alloc > 0x10000000)	/* Want to cast to u32 */
 			return -EINVAL;
 		ret = mon_bin_get_event(file, rp, getb.hdr,
-		    (cmd == MON_IOCX_GET)? PKT_SZ_API0: PKT_SZ_API1,
+		    PKT_SIZE,
 		    getb.data, (unsigned int)getb.alloc);
 		}
 		break;
@@ -917,7 +847,6 @@ static long mon_bin_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 	}
 
 	return ret;
-#endif
 }
 
 #ifdef CONFIG_COMPAT
@@ -939,7 +868,7 @@ static long mon_bin_compat_ioctl(struct file *file,
 			return -EFAULT;
 
 		ret = mon_bin_get_event(file, rp, compat_ptr(getb.hdr32),
-		    (cmd == MON_IOCX_GET32)? PKT_SZ_API0: PKT_SZ_API1,
+		    PKT_SIZE,
 		    compat_ptr(getb.data32), getb.alloc32);
 		if (ret < 0)
 			return ret;
