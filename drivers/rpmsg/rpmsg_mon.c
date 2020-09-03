@@ -83,13 +83,21 @@ static struct cdev mon_bin_cdev;
 static struct device *dev;
 static DEFINE_MUTEX(mon_lock);
 
-struct mon_bin_hdr {
+struct rpmsg_hdr {
 	u32 src;
 	u32 dst;
 	u32 reserved;
 	u16 len;
 	u16 flags;
 	u8 data[0];
+};
+
+struct mon_bin_hdr {
+	u64 timestamp;
+	u32 interface;
+	u16 vq;
+	u16 res;
+	struct rpmsg_hdr hdr;
 };
 
 /* per file statistic */
@@ -126,13 +134,8 @@ struct mon_bin_mfetch32 {
 struct mon_reader_bin *rp;
 
 /* Having these two values same prevents wrapping of the mon_bin_hdr */
-#define PKT_ALIGN   64
-#define PKT_SIZE    64
-
-#define PKT_SZ_API0 48	/* API 0 (2.6.20) size */
-#define PKT_SZ_API1 64	/* API 1 size: extra fields */
-
-#define ISODESC_MAX   128	/* Same number as usbfs allows, 2048 bytes. */
+#define PKT_ALIGN   32
+#define PKT_SIZE    32
 
 /* max number of USB bus supported */
 #define MON_BIN_MAX_MINOR 128
@@ -354,8 +357,7 @@ static void mon_buff_area_fill(const struct mon_reader_bin *rp,
 
 	ep = MON_OFF2HDR(rp, offset);
 	memset(ep, 0, PKT_SIZE);
-//	ep->type = '@';
-	ep->len = size - PKT_SIZE;
+	ep->hdr.len = size - PKT_SIZE;
 }
 
 static inline char mon_bin_get_setup(unsigned char *setupb,
@@ -437,13 +439,11 @@ static void cb(void *data, unsigned int l) {
 	unsigned int urb_length;
 	unsigned int offset;
 	unsigned int delta;
-	unsigned int ndesc, lendesc;
-	unsigned char dir;
 	struct mon_bin_hdr *ep;
-	struct mon_bin_hdr *hdr = data;
-	char data_tag = 0;
+	struct rpmsg_hdr *hdr = data;
+
 	unsigned int length = hdr->len;
-	printk("cb");
+	printk("len: %d\n", length);
 
 	ktime_get_real_ts64(&ts);
 
@@ -454,9 +454,9 @@ static void cb(void *data, unsigned int l) {
 
 	if (rp->mmap_active) {
 		offset = mon_buff_area_alloc_contiguous(rp,
-						 length + PKT_SIZE + lendesc);
+						 length + PKT_SIZE);
 	} else {
-		offset = mon_buff_area_alloc(rp, length + PKT_SIZE + lendesc);
+		offset = mon_buff_area_alloc(rp, length + PKT_SIZE);
 	}
 	if (offset == ~0) {
 		rp->cnt_lost++;
@@ -464,21 +464,21 @@ static void cb(void *data, unsigned int l) {
 		return;
 	}
 
-//	ep = MON_OFF2HDR(rp, offset);
-//	if ((offset += PKT_SIZE) >= rp->b_size) offset = 0;
+	ep = MON_OFF2HDR(rp, offset);
+	if ((offset += PKT_SIZE) >= rp->b_size) offset = 0;
+	ep->timestamp = ktime_get();
+	ep->interface = 0;
+	ep->vq = 0;
+	memcpy(&ep->hdr, data, sizeof(ep->hdr));
 
-	/*
-	 * Fill the allocated area.
-	 */
-	printk("%d %p %d", offset, data, length);
-
-	length = mon_copy_to_buff(rp, offset, data, length + sizeof(struct mon_bin_hdr));
+	printk("to_buf: %d %d\n", offset, length);
+	length = mon_copy_to_buff(rp, offset, data + sizeof(ep->hdr), length);
+	printk("to_buf: %d %d\n", offset, length);
 	if (length > 0) {
-		printk("shall shrink");
-	//	delta = (ep->len + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
-//		ep->len -= length;
-//		delta -= (ep->len + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
-//		mon_buff_area_shrink(rp, delta);
+		delta = (ep->hdr.len + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
+//		ep->hdr.len -= length;
+		delta -= (ep->hdr.len + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
+		mon_buff_area_shrink(rp, delta);
 	}
 
 	spin_unlock_irqrestore(&rp->b_lock, flags);
@@ -552,7 +552,7 @@ static int mon_bin_get_event(struct file *file, struct mon_reader_bin *rp,
 		return -EFAULT;
 	}
 
-	//step_len = min(ep->len, nbytes);
+	step_len = min(ep->hdr.len, nbytes);
 	step_len = nbytes;
 	if ((offset = rp->b_out + PKT_SIZE) >= rp->b_size) offset = 0;
 
@@ -562,7 +562,7 @@ static int mon_bin_get_event(struct file *file, struct mon_reader_bin *rp,
 	}
 
 	spin_lock_irqsave(&rp->b_lock, flags);
-	mon_buff_area_free(rp, PKT_SIZE + ep->len);
+	mon_buff_area_free(rp, PKT_SIZE + ep->hdr.len);
 	spin_unlock_irqrestore(&rp->b_lock, flags);
 	rp->b_read = 0;
 
@@ -586,7 +586,7 @@ static ssize_t mon_bin_read(struct file *file, char __user *buf,
     size_t nbytes, loff_t *ppos)
 {
 	struct mon_reader_bin *rp = file->private_data;
-	unsigned int hdrbytes = PKT_SZ_API0;
+	unsigned int hdrbytes = PKT_SIZE;
 	unsigned long flags;
 	struct mon_bin_hdr *ep;
 	unsigned int offset;
@@ -604,6 +604,8 @@ static ssize_t mon_bin_read(struct file *file, char __user *buf,
 
 	ep = MON_OFF2HDR(rp, rp->b_out);
 
+	printk("b_out: %d;  %d < %d\n", rp->b_out, rp->b_read, hdrbytes);
+	printk("%d\n", ep->hdr.len);
 	if (rp->b_read < hdrbytes) {
 		step_len = min(nbytes, (size_t)(hdrbytes - rp->b_read));
 		ptr = ((char *)ep) + rp->b_read;
@@ -615,10 +617,11 @@ static ssize_t mon_bin_read(struct file *file, char __user *buf,
 		buf += step_len;
 		rp->b_read += step_len;
 		done += step_len;
+//		printk("step_len: %d nbytes %d %d\n", step_len, nbytes, (size_t)(hdrbytes - rp->b_read));
 	}
 
 	if (rp->b_read >= hdrbytes) {
-		step_len = ep->len;
+		step_len = ep->hdr.len;
 		step_len -= rp->b_read - hdrbytes;
 		if (step_len > nbytes)
 			step_len = nbytes;
@@ -639,9 +642,9 @@ static ssize_t mon_bin_read(struct file *file, char __user *buf,
 	/*
 	 * Check if whole packet was read, and if so, jump to the next one.
 	 */
-	if (rp->b_read >= hdrbytes + ep->len) {
+	if (rp->b_read >= hdrbytes + ep->hdr.len) {
 		spin_lock_irqsave(&rp->b_lock, flags);
-		mon_buff_area_free(rp, PKT_SIZE + ep->len);
+		mon_buff_area_free(rp, PKT_SIZE + ep->hdr.len);
 		spin_unlock_irqrestore(&rp->b_lock, flags);
 		rp->b_read = 0;
 	}
@@ -667,7 +670,7 @@ static int mon_bin_flush(struct mon_reader_bin *rp, unsigned nevents)
 			break;
 
 		ep = MON_OFF2HDR(rp, rp->b_out);
-		mon_buff_area_free(rp, PKT_SIZE + ep->len);
+		mon_buff_area_free(rp, PKT_SIZE + ep->hdr.len);
 	}
 	spin_unlock_irqrestore(&rp->b_lock, flags);
 	rp->b_read = 0;
@@ -716,7 +719,7 @@ static int mon_bin_fetch(struct file *file, struct mon_reader_bin *rp,
 		}
 
 		nevents++;
-		size = ep->len + PKT_SIZE;
+		size = ep->hdr.len + PKT_SIZE;
 		size = (size + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
 		if ((cur_out += size) >= rp->b_size)
 			cur_out -= rp->b_size;
@@ -753,7 +756,7 @@ static int mon_bin_queued(struct mon_reader_bin *rp)
 		ep = MON_OFF2HDR(rp, cur_out);
 
 		nevents++;
-		size = ep->len + PKT_SIZE;
+		size = ep->hdr.len + PKT_SIZE;
 		size = (size + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
 		if ((cur_out += size) >= rp->b_size)
 			cur_out -= rp->b_size;
