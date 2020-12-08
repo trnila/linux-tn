@@ -366,7 +366,7 @@ static inline char mon_bin_get_setup(unsigned char *setupb,
 	return 0;
 }
 
-static void cb(void *data, unsigned int l) {
+static void cb(void *data, unsigned int l, u32 vq, u16 tx) {
 	struct timespec64 ts;
 	unsigned long flags;
 	unsigned int offset;
@@ -398,13 +398,11 @@ static void cb(void *data, unsigned int l) {
 	ep = MON_OFF2HDR(rp, offset);
 	if ((offset += PKT_SIZE) >= rp->b_size) offset = 0;
 	ep->timestamp = ktime_get();
-	ep->interface = 0;
-	ep->vq = 0;
+	ep->interface = vq;
+	ep->vq = tx;
 	memcpy(&ep->hdr, data, sizeof(ep->hdr));
 
-	printk("to_buf: %d %d\n", offset, length);
 	length = mon_copy_to_buff(rp, offset, data + sizeof(ep->hdr), length);
-	printk("to_buf: %d %d\n", offset, length);
 	if (length > 0) {
 		delta = (ep->hdr.len + PKT_ALIGN-1) & ~(PKT_ALIGN-1);
 //		ep->hdr.len -= length;
@@ -1067,7 +1065,7 @@ static void mon_free_buff(struct mon_pgmap *map, int npages)
 		free_page((unsigned long) map[n].ptr);
 }
 
-typedef void (*rpmsg_trace_cb)(void*, unsigned int);
+typedef void (*rpmsg_trace_cb)(void*, unsigned int, u32, u16);
 rpmsg_trace_cb tracer_cb;
 
 void rpmsg_set_tracer(rpmsg_trace_cb cb);

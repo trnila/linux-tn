@@ -189,7 +189,7 @@ static const struct rpmsg_endpoint_ops virtio_endpoint_ops = {
 };
 
 
-typedef void (*rpmsg_trace_cb)(void*, unsigned int);
+typedef void (*rpmsg_trace_cb)(void*, unsigned int, u32, u16);
 rpmsg_trace_cb tracer_cb;
 
 void rpmsg_set_tracer(rpmsg_trace_cb cb) {
@@ -645,7 +645,7 @@ static int rpmsg_send_offchannel_raw(struct rpmsg_device *rpdev,
 			 msg, sizeof(*msg) + msg->len, true);
 #endif
 	if(tracer_cb) {
-		tracer_cb(msg, len);
+		tracer_cb(msg, len, vrp->vdev->index, 1);
 	}
 
 	rpmsg_sg_init(&sg, msg, sizeof(*msg) + len);
@@ -810,7 +810,7 @@ static void rpmsg_recv_done(struct virtqueue *rvq)
 
 	while (msg) {
 		if(tracer_cb) {
-			tracer_cb(msg, len);
+			tracer_cb(msg, min(len, vrp->buf_size), vrp->vdev->index, 0);
 		}
 		err = rpmsg_recv_single(vrp, dev, msg, len);
 		if (err)
